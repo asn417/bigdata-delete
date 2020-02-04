@@ -244,21 +244,62 @@ public class TestAPI {
         Scan scan = new Scan();
         //使用正则
         RowFilter filter = new RowFilter(operator,new RegexStringComparator(rowkey));
-
-        //包含子串匹配(判断一个子串是否存在于值中，并且不区分大小写)
-        //RowFilter filter = new RowFilter(operator,new SubstringComparator(rowkey));
-
         scan.setFilter(filter);
-
         ResultScanner scanner = table.getScanner(scan);
         Map<String,List<Cell>> map = new HashMap<>();
         for(Result result:scanner){
             map.put(Bytes.toString(result.getRow()),result.listCells());
+            System.out.println("-----------------rowkey: "+Bytes.toString(result.getRow()));
         }
         table.close();
         return map;
     }
 
+    /**
+     * 包含子串匹配(判断一个子串是否存在于rowkey中，并且不区分大小写)
+     * @param tableName
+     * @param rowkey
+     * @param operator
+     * @return
+     * @throws IOException
+     */
+    public static Map<String,List<Cell>> filterByRowKeySub(String tableName, String rowkey, CompareOperator operator) throws IOException{
+        Table table = connection.getTable(TableName.valueOf(tableName));
+        Scan scan = new Scan();
+        RowFilter filter = new RowFilter(operator,new SubstringComparator(rowkey));
+        scan.setFilter(filter);
+        ResultScanner scanner = table.getScanner(scan);
+        Map<String,List<Cell>> map = new HashMap<>();
+        for(Result result:scanner){
+            map.put(Bytes.toString(result.getRow()),result.listCells());
+            System.out.println("-----------------rowkey: "+Bytes.toString(result.getRow()));
+        }
+        table.close();
+        return map;
+    }
+
+    /**
+     * 使用二进制比较器BinaryComparator，提高效率(只能是完整的rowkey)
+     * @param tableName
+     * @param rowkey
+     * @param operator
+     * @return
+     * @throws IOException
+     */
+    public static Map<String,List<Cell>> filterByRowKeyBinary(String tableName, String rowkey, CompareOperator operator) throws IOException{
+        Table table = connection.getTable(TableName.valueOf(tableName));
+        Scan scan = new Scan();
+        RowFilter filter = new RowFilter(operator,new BinaryComparator(Bytes.toBytes(rowkey)));
+        scan.setFilter(filter);
+        ResultScanner scanner = table.getScanner(scan);
+        Map<String,List<Cell>> map = new HashMap<>();
+        for(Result result:scanner){
+            map.put(Bytes.toString(result.getRow()),result.listCells());
+            System.out.println("-----------------rowkey: "+Bytes.toString(result.getRow()));
+        }
+        table.close();
+        return map;
+    }
     /**
      * 根据列族，列名，列值（支持正则）查找数据
      * 返回值：如果查询到值，会返回所有匹配的rowKey下的各列族、列名的所有数据（即使查询的时候这些列族和列名并不匹配）
@@ -293,10 +334,38 @@ public class TestAPI {
         Map<String,List<Cell>> map = new HashMap<>();
         for(Result result:scanner){
             map.put(Bytes.toString(result.getRow()),result.listCells());
+            System.out.println("-----------------rowkey: "+Bytes.toString(result.getRow()));
         }
         return map;
     }
 
+    /**
+     * 根据传入的value值精准匹配
+     * @param tableName
+     * @param columnFamily
+     * @param columnName
+     * @param value
+     * @param operator
+     * @return
+     * @throws IOException
+     */
+    public static Map<String,List<Cell>> filterByValueBytes(String tableName,String columnFamily,String columnName,
+                                                            String value,CompareOperator operator) throws IOException{
+        Table table = connection.getTable(TableName.valueOf(tableName));
+        Scan scan = new Scan();
+        //完全匹配
+        SingleColumnValueFilter filter = new SingleColumnValueFilter(Bytes.toBytes(columnFamily), Bytes.toBytes(columnName),operator,Bytes.toBytes(value));
+        //要过滤的列必须存在，如果不存在，那么这些列不存在的数据也会返回。如果不想让这些数据返回,设置setFilterIfMissing为true
+        filter.setFilterIfMissing(true);
+        scan.setFilter(filter);
+        ResultScanner scanner = table.getScanner(scan);
+        Map<String,List<Cell>> map = new HashMap<>();
+        for(Result result:scanner){
+            map.put(Bytes.toString(result.getRow()),result.listCells());
+            System.out.println("-----------------rowkey: "+Bytes.toString(result.getRow()));
+        }
+        return map;
+    }
     /**
      * 根据列名前缀过滤数据
      * @param tableName
@@ -323,11 +392,13 @@ public class TestAPI {
         Map<String,List<Cell>> map = new HashMap<>();
         for(Result result:scanner){
             map.put(Bytes.toString(result.getRow()),result.listCells());
+            System.out.println("-----------------rowkey: "+Bytes.toString(result.getRow()));
         }
         return map;
     }
 
     /**
+     * 过滤器集合的使用。
      * 根据列名范围以及列名前缀过滤数据
      * @param tableName
      * @param colPrefix
@@ -358,6 +429,7 @@ public class TestAPI {
         Map<String,List<Cell>> map = new HashMap<>();
         for(Result result:scanner){
             map.put(Bytes.toString(result.getRow()),result.listCells());
+            System.out.println("-----------------rowkey: "+Bytes.toString(result.getRow()));
         }
         return map;
     }
@@ -474,19 +546,17 @@ public class TestAPI {
         System.setProperty("hadoop.home.dir","E:\\MySoftware\\hadoop-2.7.5");
         System.out.println("--------------------------------");
 
-        /*putData("table1","0123dd02","info","age","10");
-        putData("table1","1021a023","info","age","10");
-        putData("table1","2001as12","info","age","10");
-        putData("table1","3122pd20","partition1","age","10");
-        putData("table1","4025zd00","partition1","age","10");
-        putData("table1","5120sd29","partition1","age","10");
-        putData("table1","0020fd38","info","age","10");
-        putData("table1","16212d10","info","age","10");
-        putData("table1","20291d3d","info","age","10");
-        putData("table1","3900azsd","partition1","age","10");
-        putData("table1","4021adf5","partition1","age","10");
-        putData("table1","5403a12e","partition1","age","10");*/
-        scanTable("table1","0020","0120");
+        //putData("table1","3106sd32","info","age1","80");
+
+        //scanTable("table1","0020","0120");
+        //filterByRowKeyRegex("table1","AS",CompareOperator.EQUAL);
+
+//        filterByRowKeySub("table1","AS?",CompareOperator.EQUAL);
+        filterByRowKeyBinary("table1","3123ad22",CompareOperator.EQUAL);
+        System.out.println("*****************************************");
+
+
+
         close();
     }
 
